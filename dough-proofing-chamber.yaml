@@ -1,0 +1,81 @@
+esphome:
+  name: dough-proofing-chamber
+  friendly_name: Dough Proofing Chamber
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+switch:
+  - platform: gpio
+    id: heating_element_relay
+    # internal: true
+    name: Heating Elements
+    pin: GPIO26
+
+  - platform: template
+    id: enabled
+    name: Enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+sensor:
+  - platform: dht
+    pin: GPIO23
+    model: DHT22
+    temperature:
+      name: "Temperature"
+      id: temp
+      filters:
+      - lambda: return x * (9.0/5.0) + 32.0;
+      unit_of_measurement: "°F"
+      on_value:
+        then:
+          - if:
+              condition:
+                and:
+                  - switch.is_on: enabled
+                  - lambda: 'return x < id(target_temp).state;'
+              then:
+                - if:
+                    condition:
+                      switch.is_off: heating_element_relay
+                    then:
+                      - switch.turn_on: heating_element_relay
+                      - logger.log: "Turning on heating elements"
+              else:
+                - if:
+                    condition:
+                      - switch.is_on: heating_element_relay
+                    then:
+                    - switch.turn_off: heating_element_relay
+                    - logger.log: "Turning off heating elements"
+
+    humidity:
+      name: "Humidity"
+      id: _humidity
+      unit_of_measurement: "%"
+    update_interval: 5s
+
+  - platform: uptime
+    type: seconds
+    name: Uptime Sensor
+
+number:
+  - platform: template
+    id: target_temp
+    name: Target Temperature
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 80
+    restore_value: true
+    optimistic: true
+    icon: mdi:thermometer-check
+    unit_of_measurement: "°F"
+    device_class: temperature
+    mode: box
